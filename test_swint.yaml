@@ -1,0 +1,55 @@
+description: Base SwinTracker on 2 datasets
+target:
+  service: sing
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: msrresrchvc
+  # name: SingularityTestVC
+  # workspace_name: SingularityTestWS
+
+environment:
+  # image: zhangrh1908/swintrack:latest
+  # registry: docker.io
+  # username: zhangrh1908
+  image: amlt-sing/pytorch-1.9.0-cuda11.3-cudnn8-devel:20221017T152220283
+  setup:
+    - pip install -r requirements.txt --user
+
+storage:
+  input:
+    storage_account_name: yczhaosc
+    container_name: amulet
+  external:
+    storage_account_name: scim
+    container_name: large-tracking-data
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: $CONFIG_DIR
+
+data:
+  storage_id: external
+  remote_dir: train
+
+# 提交之前检查datasets path
+jobs:
+- name: test_base_swint_300_5_thres_class_score_noisze
+  sku: G8-V100
+  command:
+    - python3 main.py SwinTrack Base --weight_path checkpoints/concat_300/checkpoint0299.pth --mixin_config test.yaml --distributed_nproc_per_node 8 --distributed_do_spawn_workers --num_workers 24 --wandb_run_offline
+  submit_args:
+    env:
+      {SHARED_MEMORY_PERCENT: 1}
+  sla_tier: premium
+  execution_mode: basic
+  priority: high
+
+
+  # - python main.py SwinTrack Tiny --distributed_nproc_per_node 4 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
+#   # - bash run_simple.sh
+
+
+# - name: train_tiny_swint
+#   sku: G8
+#   command:
+#   - python main.py SwinTrack Tiny --output_dir ./output --num_workers 12 --wandb_run_offline

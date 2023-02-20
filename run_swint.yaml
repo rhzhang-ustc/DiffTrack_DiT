@@ -41,18 +41,28 @@ data:
 
 # 提交之前检查datasets path
 jobs:
-- name: test_swint_5gt_encoder_dit_lr0.0002_infer20
+- name: swint_5gt_encoder_dit_400_20_(3, 6)
   sku: G8-V100
   command:
-  # - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
-  - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --resume checkpoints/checkpoint0299.pth --output_dir ./output --num_workers 24 --wandb_run_offline
+  - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
   submit_args:
     env:
       {SHARED_MEMORY_PERCENT: 1}
-  sla_tier: premium
+  sla_tier: premium 
   execution_mode: basic
   priority: high
-
+# jobs:
+# - name: swint_5gt_encoder_dit_400_20_(3, 6)
+#   sku: G8-V100
+#   command:
+#   # - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
+#   - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
+#   submit_args:
+#     env:
+#       {SHARED_MEMORY_PERCENT: 1}
+#   sla_tier: premium
+#   execution_mode: basic
+#   priority: high
 
   # - python main.py SwinTrack Tiny --distributed_nproc_per_node 4 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
 #   # - bash run_simple.sh

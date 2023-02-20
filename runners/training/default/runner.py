@@ -59,6 +59,12 @@ class DefaultTrainer(BaseRunner):
             ctr_x = ctr - ctr_y * 14
             self.gaussian_map[:, ctr] = torch.from_numpy(make_gaussian(14, center=(ctr_x, ctr_y))).flatten().cuda()
 
+        self.gaussian_map_large = torch.zeros((576, 576)).cuda()
+        for ctr in range(576):
+            ctr_y = ctr // 24
+            ctr_x = ctr - ctr_y * 24
+            self.gaussian_map_large[:, ctr] = torch.from_numpy(make_gaussian(24, center=(ctr_x, ctr_y))).flatten().cuda()
+
     def get_iteration_index(self):
         return self.iteration_index
 
@@ -98,8 +104,14 @@ class DefaultTrainer(BaseRunner):
     def train(self, is_train):
         self.is_train = is_train
 
-    def class_score_apply_gaussian(self, class_label, positive_batch, positive_dim, size=[14, 14]):
-        assert size[0] == size[1]
+    def class_score_apply_gaussian(self, class_label, positive_batch, positive_dim):
+        if class_label.shape[-1] == 196:
+            size = [14, 14]
+            gaussian_map = self.gaussian_map
+        elif class_label.shape[-1] == 576:
+            size = [24, 24]
+            gaussian_map = self.gaussian_map_large
+
         positive_dim_y = torch.div(positive_dim, size[0], rounding_mode = 'floor')
         positive_dim_x = positive_dim - positive_dim_y * size[0]
 
@@ -115,7 +127,7 @@ class DefaultTrainer(BaseRunner):
             xc = int((x_min + x_max)/2)
             yc = int((y_min + y_max)/2)
 
-            class_label[b] = class_label[b] * self.gaussian_map[:, xc + yc * size[0]]
+            class_label[b] = class_label[b] * gaussian_map[:, xc + yc * size[0]]
 
         return class_label
 
@@ -130,8 +142,9 @@ class DefaultTrainer(BaseRunner):
                 b, c, h, w = samples.shape
 
             gt_bbox = torch.zeros((b, int(w*h/64), 4)).cuda().float()  # b, 196, 4
-            class_label = self.class_score_apply_gaussian(targets['class_label'], targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index'])
-            # gt_bbox[targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index']] = targets['bounding_box_label']
+            # class_label = self.class_score_apply_gaussian(targets['class_label'], targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index'])
+            gt_bbox[targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index']] = targets['bounding_box_label']
+            class_label = targets['class_label']
             gt_bbox = torch.concat([gt_bbox, class_label.unsqueeze(-1)], dim=-1)
 
         else:

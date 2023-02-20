@@ -1,6 +1,6 @@
 version: 4
 
-num_epochs: 300
+num_epochs: 400
 
 branch:
   train:

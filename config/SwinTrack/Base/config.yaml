@@ -62,7 +62,8 @@ transformer:
     num_layers: 8
   decoder:
     type: "diffusion_vit"
-    depth: 12
+    fusion_depth: 3
+    depth: 6
     hidden_size: 512
     x_shape: 14
     z_shape: 7

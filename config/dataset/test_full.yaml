@@ -17,23 +17,23 @@ filters:
       remove_invalid_image: true
 
 datasets:
-  # GOT10k:
-    # type: 'SOT'
-    # splits:
-    #   - "val"
-    #   - "test"
+  GOT10k:
+    type: 'SOT'
+    splits:
+      - "val"
+      - "test"
 
   LaSOT:
     type: 'SOT'
     splits:
       - "val"
 
-  # LaSOT_Extension:
-  #   type: 'SOT'
-  #   splits:
-  #     - "full"
+  LaSOT_Extension:
+    type: 'SOT'
+    splits:
+      - "full"
 
-  # TrackingNet:
-  #   type: 'SOT'
-  #   splits:
-  #     - "test"
+  TrackingNet:
+    type: 'SOT'
+    splits:
+      - "test"

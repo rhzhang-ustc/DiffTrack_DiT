@@ -249,6 +249,7 @@ class DiT(nn.Module):
         in_channels=5,
         condition_channels=512,
         hidden_size=512,
+        fusion_depth=1,
         depth=28, 
         num_heads=16,
         mlp_ratio=4.0,
@@ -260,6 +261,8 @@ class DiT(nn.Module):
         self.num_heads = num_heads
         self.x_shape = x_shape
         self.z_shape = z_shape
+        self.fusion_depth = fusion_depth
+        self.depth = depth
 
         self.bbox_embedder = PatchEmbed(x_shape, patch_size, in_channels, hidden_size, bias=True)
         self.x_embedder = PatchEmbed(x_shape, patch_size, condition_channels, hidden_size, bias=True)
@@ -269,12 +272,16 @@ class DiT(nn.Module):
         self.x_pos_embed = nn.Parameter(torch.zeros(1, x_num_patches, hidden_size), requires_grad=False)
 
         z_num_patches = self.z_embedder.num_patches
-        self.z_pos_embed = nn.Parameter(torch.zeros(1, z_num_patches, hidden_size), requires_grad=False)\
+        self.z_pos_embed = nn.Parameter(torch.zeros(1, z_num_patches, hidden_size), requires_grad=False)
 
-        self.cross_attention = CrossAttentionBlock(dim=hidden_size, num_heads=num_heads)
+        cross_attn_modules = []
+        for _ in range(self.fusion_depth):
+            cross_attn_modules.append(CrossAttentionBlock(dim=hidden_size, num_heads=num_heads))
+
+        self.layers = nn.ModuleList(cross_attn_modules)
 
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(self.depth)
         ])
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
         self.initialize_weights()
@@ -351,16 +358,17 @@ class DiT(nn.Module):
         targets = self.bbox_embedder(targets) + self.x_pos_embed  # (N, T, D), where T = H * W / (patch_size ** 2)
         x = self.x_embedder(x) + self.x_pos_embed   # (N, 49, D)
         z = self.z_embedder(z) + self.z_pos_embed  # (N, 9, D)
-        x = self.cross_attention(x, torch.cat((z, x), dim=1))
-        c = x + t                            # (N, T, D)
-        for block in self.blocks:
-            x = block(x, c)                      # (N, T, D)
-        x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
-        x = self.unpatchify(x)                   # (N, out_channels, H, W)
-        x = x.reshape(n, self.out_channels, -1).permute(0, 2, 1)
 
-        bbox = x[:, :, :-1].view(n, self.x_shape, self.x_shape, 4).sigmoid()
-        class_score = x[:, :, -1:].view(n, self.x_shape, self.x_shape, 1).permute(0, 3, 1, 2).sigmoid()
+        for cross_attention in self.layers:
+            x = cross_attention(x, torch.cat((z, x), dim=1)) + t             # (N, T, D)
+        for block in self.blocks:
+            targets = block(targets, x)                      # (N, T, D)
+        targets = self.final_layer(targets, x)                # (N, T, patch_size ** 2 * out_channels)
+        targets = self.unpatchify(targets)                   # (N, out_channels, H, W)
+        targets = targets.reshape(n, self.out_channels, -1).permute(0, 2, 1)
+
+        bbox = targets[:, :, :-1].view(n, self.x_shape, self.x_shape, 4).sigmoid()
+        class_score = targets[:, :, -1:].view(n, self.x_shape, self.x_shape, 1).permute(0, 3, 1, 2).sigmoid()
 
         return {'class_score': class_score, 'bbox': bbox}
 
@@ -494,7 +502,8 @@ def build_dit_decoder(config,
                       dim, num_heads, mlp_ratio,
                       z_shape, x_shape):
     depth = config['transformer']['decoder']['depth']
+    fusion_depth = config['transformer']['decoder']['fusion_depth']
     hidden_size = config['transformer']['decoder']['hidden_size']
     x_shape = config['transformer']['decoder']['x_shape']
     z_shape = config['transformer']['decoder']['z_shape']
-    return DiT(x_shape, z_shape, condition_channels=dim, num_heads=num_heads, mlp_ratio=mlp_ratio, depth=depth, hidden_size=hidden_size)
+    return DiT(x_shape, z_shape, condition_channels=dim, num_heads=num_heads, mlp_ratio=mlp_ratio, fusion_depth=fusion_depth, depth=depth, hidden_size=hidden_size)

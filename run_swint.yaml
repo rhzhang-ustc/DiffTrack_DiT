@@ -1,7 +1,7 @@
-description: Base SwinTracker on 2 datasets
+description: Base DiffTracker on 4 datasets
 target:
   # service: sing
-  # # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
   # name: SingularityTestVC
   # workspace_name: SingularityTestWS
   # service: aml
@@ -12,11 +12,12 @@ target:
   name: msrresrchvc
 
 
+
 environment:
   # image: zhangrh1908/swintrack:latest
   # registry: docker.io
   # username: zhangrh1908
-  image: amlt-sing/pytorch-1.9.0-cuda11.3-cudnn8-devel:20221017T152220283
+  image: amlt-sing/pytorch-1.9.0-cuda11.3-cudnn8-devel:20221201T224031319
   # image: amlt-sing/pytorch-1.9.0-cuda11.3-a100:20221017T152211919  
   setup:
     - pip install -r requirements.txt --user
@@ -40,10 +41,11 @@ data:
 
 # 提交之前检查datasets path
 jobs:
-- name: swint_5gt
-  sku: G4-V100
+- name: test_swint_5gt_encoder_dit_lr0.0002_infer20
+  sku: G8-V100
   command:
-  - python3 main.py SwinTrack Base --distributed_nproc_per_node 4 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
+  # - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --output_dir ./output --num_workers 24 --wandb_run_offline
+  - python3 main.py SwinTrack Base --distributed_nproc_per_node 8 --distributed_do_spawn_workers --resume checkpoints/checkpoint0299.pth --output_dir ./output --num_workers 24 --wandb_run_offline
   submit_args:
     env:
       {SHARED_MEMORY_PERCENT: 1}

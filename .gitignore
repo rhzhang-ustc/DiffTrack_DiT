@@ -537,6 +537,7 @@ logging
 .vscode
 wandb
 datasets/cache/
+datasets/cache_299/
 checkpoints/
 
 

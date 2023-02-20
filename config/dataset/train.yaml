@@ -33,18 +33,18 @@ datasets:
     sampling:
       weight: 1
 
-  # TrackingNet:
-  #   type: 'SOT'
-  #   splits:
-  #     - "train"
-  #   sampling:
-  #     weight: 1
+  TrackingNet:
+    type: 'SOT'
+    splits:
+      - "train"
+    sampling:
+      weight: 1
 
-  # COCO:
-  #   type: 'DET'
-  #   parameters:
-  #     version: 2017
-  #   splits:
-  #     - "train"
-  #   sampling:
-  #     weight: 1
+  COCO:
+    type: 'DET'
+    parameters:
+      version: 2017
+    splits:
+      - "train"
+    sampling:
+      weight: 1

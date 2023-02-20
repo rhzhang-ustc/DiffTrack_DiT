@@ -3,6 +3,34 @@ import torch
 from runners.common.branch_utils import get_branch_specific_objects
 from core.run.metric_logger.context import get_logger
 from runners.interface import BaseRunner
+import numpy as np
+
+
+def make_gaussian(size, fwhm = 5, center=None, norm=False):
+    """ Make a square gaussian kernel.
+
+    size is the length of a side of the square
+    fwhm is full-width-half-maximum, which
+    can be thought of as an effective radius.
+    """
+
+    x = np.arange(0, size, 1, float)
+    y = x[:,np.newaxis]
+
+    if center is None:
+        x0 = y0 = size // 2
+    else:
+        x0 = center[0]
+        y0 = center[1]
+    
+    gaussian = np.exp(-4*np.log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2)
+
+    if norm:
+        max_num = np.max(gaussian)
+        gaussian = gaussian/max_num
+
+    return gaussian
+
 
 
 class DefaultTrainer(BaseRunner):
@@ -24,6 +52,12 @@ class DefaultTrainer(BaseRunner):
         self.is_train = True
         self.iteration_index = 0
         self.iteration_step = iteration_step
+
+        self.gaussian_map = torch.zeros((196, 196)).cuda()
+        for ctr in range(196):
+            ctr_y = ctr // 14
+            ctr_x = ctr - ctr_y * 14
+            self.gaussian_map[:, ctr] = torch.from_numpy(make_gaussian(14, center=(ctr_x, ctr_y))).flatten().cuda()
 
     def get_iteration_index(self):
         return self.iteration_index
@@ -64,6 +98,27 @@ class DefaultTrainer(BaseRunner):
     def train(self, is_train):
         self.is_train = is_train
 
+    def class_score_apply_gaussian(self, class_label, positive_batch, positive_dim, size=[14, 14]):
+        assert size[0] == size[1]
+        positive_dim_y = torch.div(positive_dim, size[0], rounding_mode = 'floor')
+        positive_dim_x = positive_dim - positive_dim_y * size[0]
+
+        batch, _ = class_label.shape
+        for b in range(batch):
+
+            batch_slice = (positive_batch == b)
+            x_min, _ = torch.min(positive_dim_x[batch_slice], dim=-1)
+            x_max, _ = torch.max(positive_dim_x[batch_slice], dim=-1)
+            y_min, _ = torch.min(positive_dim_y[batch_slice], dim=-1)
+            y_max, _ = torch.max(positive_dim_y[batch_slice], dim=-1)
+
+            xc = int((x_min + x_max)/2)
+            yc = int((y_min + y_max)/2)
+
+            class_label[b] = class_label[b] * self.gaussian_map[:, xc + yc * size[0]]
+
+        return class_label
+
     def get_gt_bbox(self, samples, targets):
         # return B，196, 5
         if samples is not None and targets is not None:
@@ -75,8 +130,10 @@ class DefaultTrainer(BaseRunner):
                 b, c, h, w = samples.shape
 
             gt_bbox = torch.zeros((b, int(w*h/64), 4)).cuda().float()  # b, 196, 4
-            gt_bbox[targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index']] = targets['bounding_box_label']
-            gt_bbox = torch.concat([gt_bbox, targets['class_label'].unsqueeze(-1)], dim=-1)
+            class_label = self.class_score_apply_gaussian(targets['class_label'], targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index'])
+            # gt_bbox[targets['positive_sample_batch_dim_index'], targets['positive_sample_feature_map_dim_index']] = targets['bounding_box_label']
+            gt_bbox = torch.concat([gt_bbox, class_label.unsqueeze(-1)], dim=-1)
+
         else:
             gt_bbox = None
         return gt_bbox

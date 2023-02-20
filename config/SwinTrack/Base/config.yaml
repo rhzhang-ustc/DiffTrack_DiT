@@ -61,10 +61,11 @@ transformer:
     type: "concatenation_feature_fusion"
     num_layers: 8
   decoder:
-    type: "concatenation_feature_fusion"
-    num_layers: 1
-    fusion: 'concat'
-    dim: 512
+    type: "diffusion_vit"
+    depth: 12
+    hidden_size: 512
+    x_shape: 14
+    z_shape: 7
 
 head:
   output_protocol:

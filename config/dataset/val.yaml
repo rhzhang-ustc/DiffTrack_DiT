@@ -18,9 +18,11 @@ filters:
 
 datasets:
   GOT10k:
+    type: 'SOT'
     splits:
       - "val"
 
   LaSOT:
+    type: 'SOT'
     splits:
       - "val"

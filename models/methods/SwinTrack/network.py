@@ -81,7 +81,7 @@ class SwinTrack(nn.Module):
 
         # build diffusion
         timesteps = 300   #训练时的采样步数
-        sampling_timesteps = 5 #cfg.MODEL.DiffusionDet.SAMPLE_STEP # test时的步数，增加 （>50, 100, 200） 2卡
+        sampling_timesteps = 20 #cfg.MODEL.DiffusionDet.SAMPLE_STEP # test时的步数，增加 （>50, 100, 200） 2卡
         self.objective = 'pred_x0'
         betas = cosine_beta_schedule(timesteps)
         alphas = 1. - betas
@@ -143,7 +143,7 @@ class SwinTrack(nn.Module):
             self.x_input_projection.apply(_init_weights)
 
         self.encoder.apply(_init_weights)
-        self.decoder.apply(_init_weights)
+        # self.decoder.apply(_init_weights)
 
     def initialize(self, z):
         return self._get_template_feat(z)
@@ -191,41 +191,16 @@ class SwinTrack(nn.Module):
         t_emb = self.time_mlp(t)
         t_emb = t_emb.unsqueeze(1)
 
-        decoder_feat = self.decoder(z_feat, x_feat, z_pos, x_pos, targets, t_emb)
+        results = self.decoder(z_feat, x_feat, z_pos, x_pos, targets, t_emb)
 
-        decoder_feat = self.out_norm(decoder_feat)
+        x_start =torch.concat([results['bbox'], results['class_score'].permute(0, 2, 3, 1)], dim=-1)
 
-        results = self.head(decoder_feat)
+        x_start = (x_start * 2 - 1.) * self.scale
+        x_start = torch.clamp(x_start, min=-1 * self.scale, max=self.scale)
+        x_start = x_start.reshape(x.shape)
+        pred_noise = self.predict_noise_from_start(x, t, x_start).float()
 
-        if True:
-            # thresholding
-            # class_score: 8, 1, 14, 14
-            # bbox: 8, 14, 14, 4
-            thres = 0.5
-            b, h, w, c = results['bbox'].shape
-            valid_idx = results['class_score'].flatten() > thres
-
-            class_score = torch.zeros_like(results['class_score'].flatten()).cuda()
-            class_score[valid_idx] = 1
-            class_score = class_score.reshape(results['class_score'].shape) 
-            bbox = results['bbox']
-
-            x_start_thres = torch.concat([bbox, class_score.permute(0, 2, 3, 1)], dim=-1)
-        else:
-            x_start_thres = torch.concat([results['bbox'], results['class_score'].permute(0, 2, 3, 1)], dim=-1)
-
-        # x_start = torch.concat([results['bbox'], results['class_score'].permute(0, 2, 3, 1)], dim=-1)
-        # x_start = (x_start * 2 - 1.) * self.scale
-        # x_start = torch.clamp(x_start, min=-1 * self.scale, max=self.scale)
-        # x_start = x_start.reshape(x.shape)
-        # pred_noise = self.predict_noise_from_start(x, t, x_start).float()
-
-        x_start_thres = (x_start_thres * 2 - 1.) * self.scale
-        x_start_thres = torch.clamp(x_start_thres, min=-1 * self.scale, max=self.scale)
-        x_start_thres = x_start_thres.reshape(x.shape)
-        pred_noise = self.predict_noise_from_start(x, t, x_start_thres).float()
-
-        return pred_noise, x_start_thres, results
+        return pred_noise, x_start, results
 
     @torch.no_grad()
     def ddim_sample(self, z_feat, x_feat, z_pos, x_pos):
@@ -311,7 +286,7 @@ class SwinTrack(nn.Module):
         if self.x_input_projection is not None:
             x_feat = self.x_input_projection(x_feat)
         return x_feat
-
+    
     def _track(self, z_feat, x_feat, gt_bbox=None):
         z_pos = None
         x_pos = None
@@ -336,8 +311,5 @@ class SwinTrack(nn.Module):
             t = self.time_mlp(t)
             t = t.unsqueeze(1)
 
-            decoder_feat = self.decoder(z_feat, x_feat, z_pos, x_pos, targets, t)
-
-            decoder_feat = self.out_norm(decoder_feat)
-
-            return self.head(decoder_feat)
+            results = self.decoder(z_feat, x_feat, z_pos, x_pos, targets, t)
+            return results
